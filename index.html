@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>9x9 Gomoku - AI Opponent</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { 
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #e0e0e0; 
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
+        .game-container { max-width: 900px; margin: 20px auto; padding: 0 15px; }
+        
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        }
+        .header h1 { margin: 0; font-weight: 700; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        
+        .board { 
+            display: grid; 
+            grid-template-columns: repeat(9, 1fr); 
+            gap: 3px; 
+            margin: 20px 0;
+            background: #0d0d1a;
+            padding: 3px;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        .cell { 
+            aspect-ratio: 1; 
+            background: linear-gradient(145deg, #1e1e2e, #252538);
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 1.3rem; 
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        .cell:hover:not(.filled) { 
+            transform: scale(1.08); 
+            background: linear-gradient(145deg, #2a2a3e, #353548);
+            box-shadow: 0 0 15px rgba(79, 195, 247, 0.4);
+        }
+        .cell.filled { cursor: not-allowed; }
+        .cell.x { color: #4fc3f7; text-shadow: 0 0 10px rgba(79, 195, 247, 0.8); }
+        .cell.o { color: #ff8a65; text-shadow: 0 0 10px rgba(255, 138, 101, 0.8); }
+        
+        .status { 
+            margin: 15px 0; 
+            padding: 15px; 
+            background: linear-gradient(135deg, #1e1e2e 0%, #252538 100%);
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .controls { 
+            display: flex; 
+            gap: 10px; 
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .controls button {
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        .player-info { 
+            display: flex; 
+            justify-content: space-around; 
+            margin: 15px 0;
+            gap: 15px;
+        }
+        .player { 
+            padding: 12px 24px; 
+            border-radius: 10px; 
+            font-weight: 600;
+            flex: 1;
+            text-align: center;
+            background: linear-gradient(135deg, #1e1e2e 0%, #252538 100%);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .player.active { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #ffffff;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container game-container">
+        <div class="header">
+            <h1>🎮 9x9 Gomoku</h1>
+            <small>Play against the AI!</small>
+        </div>
+
+        <div class="player-info">
+            <div id="player-human" class="player active">
+                <div>👤 Te (X)</div>
+            </div>
+            <div id="player-ai" class="player">
+                <div>🤖 AI (O)</div>
+            </div>
+        </div>
+
+        <div class="board" id="board"></div>
+        <div class="status" id="status">You start! (X)</div>
+
+        <div class="controls">
+            <button id="btn-reset">🔄 New game</button>
+        </div>
+    </div>
+
+    <script>
+        const SIZE = 9;
+        const WIN_LEN = 5;
+        
+        // AI Genome (betanított súlyok)
+        //
+        //    YOU CAN TRAIN YOUR OWN AI BY MODIFYING THE CODE PROVIDED IN THE GITHUB REPO
+        //
+        //
+        //
+        const AI_GENOME = {
+            "my_open_3": 12.858369891909796,
+            "my_closed_3": 14.029902609265983,
+            "my_open_4": 8.12764091104545,
+            "my_closed_4": 13.654545659606482,
+            "enemy_open_3": 3.912342336541682,
+            "enemy_closed_3": 24.7328887357228,
+            "enemy_open_4": 17.806024327903863,
+            "enemy_closed_4": 13.970223372620925,
+            "my_threats": 3.365259690569588,
+            "enemy_threats": 20.562889597782657
+        };
+        //
+        //
+        //
+        //
+        //
+        //
+
+
+        let board = Array(SIZE * SIZE).fill(null);
+        let currentPlayer = 'X';
+        let gameOver = false;
+
+        const boardEl = document.getElementById('board');
+        const statusEl = document.getElementById('status');
+        const resetBtn = document.getElementById('btn-reset');
+        const playerHumanEl = document.getElementById('player-human');
+        const playerAiEl = document.getElementById('player-ai');
+
+        // ===== GAME LOGIC =====
+        
+        function getPromisingMoves(board) {
+            const occupied = board.map((x, i) => x !== null ? i : null).filter(i => i !== null);
+            
+            if (occupied.length === 0) {
+                return [Math.floor(SIZE * SIZE / 2)]; // Center
+            }
+            
+            const promising = new Set();
+            const directions = [-SIZE-1, -SIZE, -SIZE+1, -1, 1, SIZE-1, SIZE, SIZE+1];
+            
+            for (const idx of occupied) {
+                for (const d of directions) {
+                    const neighbor = idx + d;
+                    const r = Math.floor(idx / SIZE);
+                    const c = idx % SIZE;
+                    const nr = Math.floor(neighbor / SIZE);
+                    const nc = neighbor % SIZE;
+                    
+                    if (neighbor >= 0 && neighbor < SIZE * SIZE && 
+                        Math.abs(r - nr) <= 1 && Math.abs(c - nc) <= 1 &&
+                        board[neighbor] === null) {
+                        promising.add(neighbor);
+                    }
+                }
+            }
+            
+            return Array.from(promising);
+        }
+
+        function isWin(board, player) {
+            // Horizontal
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c <= SIZE - WIN_LEN; c++) {
+                    let count = 0;
+                    for (let k = 0; k < WIN_LEN; k++) {
+                        if (board[r * SIZE + c + k] === player) count++;
+                    }
+                    if (count === WIN_LEN) return true;
+                }
+            }
+            
+            // Vertical
+            for (let c = 0; c < SIZE; c++) {
+                for (let r = 0; r <= SIZE - WIN_LEN; r++) {
+                    let count = 0;
+                    for (let k = 0; k < WIN_LEN; k++) {
+                        if (board[(r + k) * SIZE + c] === player) count++;
+                    }
+                    if (count === WIN_LEN) return true;
+                }
+            }
+            
+            // Diagonals
+            for (let r = 0; r <= SIZE - WIN_LEN; r++) {
+                for (let c = 0; c <= SIZE - WIN_LEN; c++) {
+                    let count1 = 0, count2 = 0;
+                    for (let k = 0; k < WIN_LEN; k++) {
+                        if (board[(r + k) * SIZE + c + k] === player) count1++;
+                        if (board[(r + WIN_LEN - 1 - k) * SIZE + c + k] === player) count2++;
+                    }
+                    if (count1 === WIN_LEN || count2 === WIN_LEN) return true;
+                }
+            }
+            
+            return false;
+        }
+
+        function getLines(board) {
+            const lines = [];
+            
+            // Rows
+            for (let r = 0; r < SIZE; r++) {
+                lines.push(board.slice(r * SIZE, (r + 1) * SIZE));
+            }
+            
+            // Columns
+            for (let c = 0; c < SIZE; c++) {
+                const col = [];
+                for (let r = 0; r < SIZE; r++) {
+                    col.push(board[r * SIZE + c]);
+                }
+                lines.push(col);
+            }
+            
+            // Diagonals
+            for (let k = -SIZE + 1; k < SIZE; k++) {
+                const diag1 = [], diag2 = [];
+                for (let r = 0; r < SIZE; r++) {
+                    if (r + k >= 0 && r + k < SIZE) {
+                        diag1.push(board[r * SIZE + (r + k)]);
+                    }
+                    if (SIZE - 1 - (r + k) >= 0 && SIZE - 1 - (r + k) < SIZE) {
+                        diag2.push(board[r * SIZE + (SIZE - 1 - (r + k))]);
+                    }
+                }
+                if (diag1.length >= WIN_LEN) lines.push(diag1);
+                if (diag2.length >= WIN_LEN) lines.push(diag2);
+            }
+            
+            return lines;
+        }
+
+        function countPattern(line, player, length, closed = false) {
+            let count = 0;
+            const ln = line.length;
+            
+            for (let i = 0; i <= ln - length; i++) {
+                const window = line.slice(i, i + length);
+                if (window.every(c => c === player)) {
+                    if (closed) {
+                        const leftBlocked = (i === 0 || line[i - 1] !== null);
+                        const rightBlocked = (i + length === ln || line[i + length] !== null);
+                        if (leftBlocked || rightBlocked) count++;
+                    } else {
+                        const leftFree = (i > 0 && line[i - 1] === null);
+                        const rightFree = (i + length < ln && line[i + length] === null);
+                        if (leftFree && rightFree) count++;
+                    }
+                }
+            }
+            
+            return count;
+        }
+
+        function countThreats(board, player) {
+            let threats = 0;
+            const lines = getLines(board);
+            
+            for (const line of lines) {
+                if (line.length < WIN_LEN) continue;
+                
+                for (let i = 0; i <= line.length - WIN_LEN; i++) {
+                    const window = line.slice(i, i + WIN_LEN);
+                    const playerCount = window.filter(x => x === player).length;
+                    const emptyCount = window.filter(x => x === null).length;
+                    if (playerCount === WIN_LEN - 1 && emptyCount === 1) {
+                        threats++;
+                    }
+                }
+            }
+            
+            return threats;
+        }
+
+        function extractFeatures(board) {
+            const features = {
+                'my_open_3': 0, 'my_closed_3': 0,
+                'my_open_4': 0, 'my_closed_4': 0,
+                'enemy_open_3': 0, 'enemy_closed_3': 0,
+                'enemy_open_4': 0, 'enemy_closed_4': 0,
+                'my_threats': 0, 'enemy_threats': 0,
+            };
+            
+            const lines = getLines(board);
+            
+            for (const line of lines) {
+                features['my_open_4'] += countPattern(line, 'O', 4, false);
+                features['my_closed_4'] += countPattern(line, 'O', 4, true);
+                features['my_open_3'] += countPattern(line, 'O', 3, false);
+                features['my_closed_3'] += countPattern(line, 'O', 3, true);
+                
+                features['enemy_open_4'] += countPattern(line, 'X', 4, false);
+                features['enemy_closed_4'] += countPattern(line, 'X', 4, true);
+                features['enemy_open_3'] += countPattern(line, 'X', 3, false);
+                features['enemy_closed_3'] += countPattern(line, 'X', 3, true);
+            }
+            
+            features['my_threats'] = countThreats(board, 'O');
+            features['enemy_threats'] = countThreats(board, 'X');
+            
+            return features;
+        }
+
+        function chooseAIMove(board, genome) {
+            let bestScore = -Infinity;
+            let bestMove = null;
+            const candidates = getPromisingMoves(board);
+            
+            for (const idx of candidates) {
+                board[idx] = 'O';
+                
+                // Immediate win
+                if (isWin(board, 'O')) {
+                    board[idx] = null;
+                    return idx;
+                }
+                
+                // Block immediate enemy win
+                board[idx] = 'X';
+                if (isWin(board, 'X')) {
+                    board[idx] = null;
+                    return idx;
+                }
+                board[idx] = 'O';
+                
+                const features = extractFeatures(board);
+                let score = 0;
+                for (const key in features) {
+                    score += features[key] * genome[key];
+                }
+                
+                score += Math.random() * 0.1; // Small noise
+                
+                board[idx] = null;
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = idx;
+                }
+            }
+            
+            return bestMove !== null ? bestMove : candidates[0];
+        }
+
+        // ===== UI =====
+        
+        function initBoard() {
+            boardEl.innerHTML = '';
+            for (let i = 0; i < SIZE * SIZE; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => handleClick(i));
+                boardEl.appendChild(cell);
+            }
+            updateStatus();
+        }
+
+        function updateStatus() {
+            if (isWin(board, 'X')) {
+                statusEl.textContent = '🎉 Gratulálok! Nyertél!';
+                gameOver = true;
+                playerHumanEl.classList.add('active');
+                playerAiEl.classList.remove('active');
+                return;
+            }
+            if (isWin(board, 'O')) {
+                statusEl.textContent = '🤖 Az AI nyert!';
+                gameOver = true;
+                playerHumanEl.classList.remove('active');
+                playerAiEl.classList.add('active');
+                return;
+            }
+            if (board.every(c => c !== null)) {
+                statusEl.textContent = '🤝 Döntetlen!';
+                gameOver = true;
+                playerHumanEl.classList.remove('active');
+                playerAiEl.classList.remove('active');
+                return;
+            }
+            
+            if (currentPlayer === 'X') {
+                statusEl.textContent = 'Te következel (X)';
+                playerHumanEl.classList.add('active');
+                playerAiEl.classList.remove('active');
+            } else {
+                statusEl.textContent = 'AI gondolkodik... (O)';
+                playerHumanEl.classList.remove('active');
+                playerAiEl.classList.add('active');
+            }
+        }
+
+        function handleClick(index) {
+            if (gameOver || board[index] !== null || currentPlayer === 'O') return;
+            
+            board[index] = 'X';
+            renderBoard();
+            currentPlayer = 'O';
+            updateStatus();
+            
+            if (!gameOver && board.includes(null)) {
+                setTimeout(() => aiMove(), 500);
+            }
+        }
+
+        function renderBoard() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach((cell, i) => {
+                cell.textContent = board[i] || '';
+                cell.className = 'cell';
+                if (board[i] === 'X') cell.classList.add('x', 'filled');
+                if (board[i] === 'O') cell.classList.add('o', 'filled');
+            });
+            updateStatus();
+        }
+
+        function aiMove() {
+            if (gameOver) return;
+            
+            const move = chooseAIMove(board, AI_GENOME);
+            board[move] = 'O';
+            currentPlayer = 'X';
+            renderBoard();
+        }
+
+        function resetGame() {
+            board = Array(SIZE * SIZE).fill(null);
+            currentPlayer = 'X';
+            gameOver = false;
+            renderBoard();
+        }
+
+        // ===== EVENT LISTENERS =====
+        
+        resetBtn.addEventListener('click', resetGame);
+
+        // ===== INIT =====
+        initBoard();
+    </script>
+</body>
+</html>
