@@ -431,11 +431,11 @@
             }
             
             if (currentPlayer === 'X') {
-                statusEl.textContent = 'Te következel (X)';
+                statusEl.textContent = 'Your turn (X)';
                 playerHumanEl.classList.add('active');
                 playerAiEl.classList.remove('active');
             } else {
-                statusEl.textContent = 'AI gondolkodik... (O)';
+                statusEl.textContent = 'The AI is thinking... (O)';
                 playerHumanEl.classList.remove('active');
                 playerAiEl.classList.add('active');
             }
